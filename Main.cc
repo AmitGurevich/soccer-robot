@@ -1,145 +1,172 @@
-// Include the Pixy2 library
+// Define the necessary libraries
+#include <Arduino.h>
 #include <Pixy2.h>
+#include <Ultrasonic.h>
+#include <Motor.h>
 
-// Create a Pixy2 object
-Pixy2 pixy;
+// Define the motor pins
+#define LEFT_MOTOR_FORWARD 9
+#define LEFT_MOTOR_REVERSE 10
+#define RIGHT_MOTOR_FORWARD 11
+#define RIGHT_MOTOR_REVERSE 12
 
-// Define the pins for the motor controller
-#define ENA 9
-#define IN1 8
-#define IN2 7
-#define IN3 6
-#define IN4 5
-#define ENB 10
+// Define the Pixy camera pins
+#define PIXY_CLK 6
+#define PIXY_DAT 5
 
-// Define the pins for the ultrasonic sensor
-#define TRIG 11
-#define ECHO 12
+// Define the ultrasonic sensor pins
+#define TRIGGER_PIN 13
+#define ECHO_PIN 14
 
-// Define the base speed of the motors
-#define BASE_SPEED 100
+// Define the speed of the robot
+#define SPEED 255
 
-// Define the dead zone for the error
-#define DEAD_ZONE 10
+// Create instances of the motor, Pixy camera, and ultrasonic sensor
+Motor leftMotor(LEFT_MOTOR_FORWARD, LEFT_MOTOR_REVERSE);
+Motor rightMotor(RIGHT_MOTOR_FORWARD, RIGHT_MOTOR_REVERSE);
+Pixy2 pixy(PIXY_CLK, PIXY_DAT);
+Ultrasonic ultrasonic(TRIGGER_PIN, ECHO_PIN);
 
-// Define the PID constants
-#define KP 0.5
-#define KI 0.1
-#define KD 0.2
-
-// Define the maximum distance to stop the robot
-#define MAX_DIST 20
-
-// Define some variables for the PID loop
-int error = 0;
-int prev_error = 0;
-int integral = 0;
-int derivative = 0;
-int output = 0;
-
-// Define a variable for the distance
-int distance = 0;
-
-// Define a function to set the speed and direction of the left motor
-void leftMotor(int speed, bool dir) {
-  analogWrite(ENA, speed); // Set the speed using PWM
-  digitalWrite(IN1, dir); // Set the direction using a boolean value
-  digitalWrite(IN2, !dir); // Set the opposite direction using the negation of the boolean value
-}
-
-// Define a function to set the speed and direction of the right motor
-void rightMotor(int speed, bool dir) {
-  analogWrite(ENB, speed); // Set the speed using PWM
-  digitalWrite(IN3, dir); // Set the direction using a boolean value
-  digitalWrite(IN4, !dir); // Set the opposite direction using the negation of the boolean value
-}
-
-// Define a function to get the distance from the ultrasonic sensor
-int getDistance() {
-  long duration; // Define a variable to store the duration of the pulse
-  int distance; // Define a variable to store the distance
-  digitalWrite(TRIG, LOW); // Set the trigger pin to low
-  delayMicroseconds(2); // Wait for 2 microseconds
-  digitalWrite(TRIG, HIGH); // Set the trigger pin to high
-  delayMicroseconds(10); // Wait for 10 microseconds
-  digitalWrite(TRIG, LOW); // Set the trigger pin to low
-  duration = pulseIn(ECHO, HIGH); // Measure the duration of the echo pulse
-  distance = duration * 0.034 / 2; // Calculate the distance in centimeters
-  return distance; // Return the distance
-}
-
-// Define a function to follow the object using the Pixy2 camera
-void followObject() {
-  int x; // Define a variable to store the x coordinate of the object
-  int y; // Define a variable to store the y coordinate of the object
-  int w; // Define a variable to store the width of the object
-  int h; // Define a variable to store the height of the object
-  pixy.ccc.getBlocks(); // Get the blocks detected by the Pixy2 camera
-  if (pixy.ccc.numBlocks) { // Check if there are any blocks
-    x = pixy.ccc.blocks[0].m_x; // Get the x coordinate of the largest block
-    y = pixy.ccc.blocks[0].m_y; // Get the y coordinate of the largest block
-    w = pixy.ccc.blocks[0].m_width; // Get the width of the largest block
-    h = pixy.ccc.blocks[0].m_height; // Get the height of the largest block
-    error = x - pixy.frameWidth / 2; // Calculate the error as the difference between the x coordinate and the center of the frame
-    integral = integral + error; // Calculate the integral as the sum of the errors
-    derivative = error - prev_error; // Calculate the derivative as the difference between the current error and the previous error
-    output = KP * error + KI * integral + KD * derivative; // Calculate the output as the weighted sum of the error, integral and derivative
-    prev_error = error; // Update the previous error
-    if (abs(error) < DEAD_ZONE) { // Check if the error is within the dead zone
-      output = 0; // Set the output to zero
-    }
-    if (output > 0) { // Check if the output is positive
-      leftMotor(BASE_SPEED - output, true); // Decrease the speed of the left motor and move forward
-      rightMotor(BASE_SPEED, true); // Keep the speed of the right motor and move forward
-    }
-    else if (output < 0) { // Check if the output is negative
-      leftMotor(BASE_SPEED, true); // Keep the speed of the left motor and move forward
-      rightMotor(BASE_SPEED + output, true); // Increase the speed of the right motor and move forward
-    }
-    else { // Check if the output is zero
-      leftMotor(BASE_SPEED, true); // Keep the speed of the left motor and move forward
-      rightMotor(BASE_SPEED, true); // Keep the speed of the right motor and move forward
-    }
-  }
-  else { // If there are no blocks
-    leftMotor(0, true); // Stop the left motor
-    rightMotor(0, true); // Stop the right motor
-  }
-}
-
-// Define the setup function
+// Main setup function
 void setup() {
   // Initialize the serial communication
   Serial.begin(9600);
-  // Initialize the Pixy2 camera
+
+  // Initialize the Pixy camera
   pixy.init();
-  // Set the signature of the object to track
-  pixy.setLamp(1, 0); // Turn on the LED
-  pixy.setLED(255, 255, 255); // Set the LED color to white
-  pixy.changeProg("color_connected_components"); // Change the program to color connected components
-  pixy.setServos(500, 500); // Center the servos
-  // Set the pins for the motor controller as outputs
-  pinMode(ENA, OUTPUT);
-  pinMode(IN1, OUTPUT);
-  pinMode(IN2, OUTPUT);
-  pinMode(IN3, OUTPUT);
-  pinMode(IN4, OUTPUT);
-  pinMode(ENB, OUTPUT);
-  // Set the pins for the ultrasonic sensor as inputs and outputs
-  pinMode(TRIG, OUTPUT);
-  pinMode(ECHO, INPUT);
+
+  // Set the speed of the robot
+  leftMotor.setSpeed(SPEED);
+  rightMotor.setSpeed(SPEED);
 }
 
-// Define the loop function
+// Main loop function
 void loop() {
-  distance = getDistance(); // Get the distance from the ultrasonic sensor
-  Serial.print("Distance: "); // Print the distance
+  // Get the latest data from the Pixy camera
+  pixy.getBlocks();
+
+  // Check if there is a block in front of the robot
+  if (pixy.blocks[0].type == COLOR_CODE) {
+    // Get the position of the block
+    int x = pixy.blocks[0].x;
+
+    // Turn the robot towards the block
+    if (x > 160) {
+      leftMotor.forward();
+      rightMotor.reverse();
+    } else if (x < 140) {
+      leftMotor.reverse();
+      rightMotor.forward();
+    }
+
+    // Move forward towards the block
+    leftMotor.forward();
+    rightMotor.forward();
+  } else {
+    // Stop the robot
+    leftMotor.stop();
+    rightMotor.stop();
+  }
+
+  // Check if there is an obstacle in front of the robot
+  long distance = ultrasonic.read();
+  if (distance < 10) {
+    // Stop the robot and turn away from the obstacle
+    leftMotor.stop();
+    rightMotor.stop();
+    leftMotor.reverse();
+    rightMotor.forward();
+    delay(500);
+  }
+}
+```
+modify this code so it will work as the code above:"#define motor1Pin1 2
+#define motor1Pin2 4
+#define motor1EnablePin 3
+#define motor2Pin1 5
+#define motor2Pin2 7
+#define motor2EnablePin 6
+
+#define trigPin 9
+#define echoPin 8
+
+#define distanceThreshold 20
+ void setup() {
+  // Configure motor pins as output
+  pinMode(motor1Pin1, OUTPUT);
+  pinMode(motor1Pin2, OUTPUT);
+  pinMode(motor1EnablePin, OUTPUT);
+  pinMode(motor2Pin1, OUTPUT);
+  pinMode(motor2Pin2, OUTPUT);
+  pinMode(motor2EnablePin, OUTPUT);
+
+  // Configure ultrasonic sensor pins
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
+  // Set initial motor direction
+  digitalWrite(motor1Pin1, HIGH);
+  digitalWrite(motor1Pin2, LOW);
+  digitalWrite(motor2Pin1, HIGH);
+  digitalWrite(motor2Pin2, LOW);
+
+  // Initialize Serial communication
+  Serial.begin(9600);
+}
+
+void loop() {
+
+long duration, distance;
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  duration = pulseIn(echoPin, HIGH);
+  distance = duration * 0.034 / 2;
+
+Serial.print("Distance: ");
   Serial.println(distance);
-  if (distance > MAX_DIST) { // Check if the distance is greater than the maximum distance
-    followObject(); // Follow the object using the Pixy2 camera
+if (distance <= distanceThreshold || distance > 2000) {
+    moveBackward();
+  } else if (10 <= distance && Distance <= distanceThreshold){
+    stopMotors();
   }
-  else { // If the distance is less than or equal to the maximum distance
-    leftMotor(0, true); // Stop the left motor
-    rightMotor(0, true); // Stop the right motor
+ 
+  else {
+    // Object not detected, move forward
+    moveForward();
   }
+}
+
+
+}
+
+void moveForward() {
+  digitalWrite(motor1Pin1, HIGH);
+  digitalWrite(motor1Pin2, LOW);
+  digitalWrite(motor2Pin1, HIGH);
+  digitalWrite(motor2Pin2, LOW);
+
+  analogWrite(motor1EnablePin, 255);
+  analogWrite(motor2EnablePin, 255);
+}
+void stopMotors() {
+  digitalWrite(motor1Pin1, LOW);
+  digitalWrite(motor1Pin2, LOW);
+  digitalWrite(motor2Pin1, LOW);
+  digitalWrite(motor2Pin2, LOW);
+
+  analogWrite(motor1EnablePin, 0);
+  analogWrite(motor2EnablePin, 0);
+}
+void moveBackward(){
+  digitalWrite(motor1Pin1, LOW;
+  digitalWrite(motor1Pin2, HIGH);
+  digitalWrite(motor2Pin1, LOW);
+  digitalWrite(motor2Pin2, HIGH);
+
+  // Set motor speeds to zero
+  analogWrite(motor1EnablePin, 255);
+  analogWrite(motor2EnablePin, 255);
 }
