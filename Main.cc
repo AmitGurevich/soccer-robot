@@ -1,3 +1,4 @@
+#include <Wire.h>
 #define motor1Pin1 2
 #define motor1Pin2 4
 #define motor1EnablePin 3
@@ -91,7 +92,7 @@ void loop() {
   if (distance <= distanceThreshold || distance > 2000) {
     // Obstacle detected, move backward
     moveBackward();
-  } else if (10 <= distance && Distance <= distanceThreshold){
+  } else if (10 <= distance && distance <= distanceThreshold){
     // Obstacle detected, stop motors
     stopMotors();
   }
@@ -118,7 +119,7 @@ void stopMotors() {
 }
 
 void moveBackward(){
-  digitalWrite(motor1Pin1, LOW;
+  digitalWrite(motor1Pin1, LOW);
   digitalWrite(motor1Pin2, HIGH);
   digitalWrite(motor2Pin1, LOW);
   digitalWrite(motor2Pin2, HIGH);
