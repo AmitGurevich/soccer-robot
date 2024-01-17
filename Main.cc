@@ -92,7 +92,7 @@ void loop() {
   if (distance <= distanceThreshold || distance > 2000) {
     // Obstacle detected, move backward
     moveBackward();
-  } else if (10 <= distance && distance <= distanceThreshold){
+  } else if (20 <= distance && distance <= 30){
     // Obstacle detected, stop motors
     stopMotors();
   }
