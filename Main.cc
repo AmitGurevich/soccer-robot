@@ -1,4 +1,3 @@
-#include <Wire.h>
 #include <Pixy2.h>
 
 #define motor1Pin1 2
@@ -11,15 +10,12 @@
 #define trigPin 9
 #define echoPin 8
 
-#define distanceThreshold 10
 #define pixyI2CAddress 0x54
 #define MotorSpeed 50
 
 // Pixy camera and global variables
-int pixyXCenter = 0;
-int pixyYCenter = 0;
-int pixyWidth = 0;
-int pixyHeight = 0;
+int BallXCenter;
+int GoalXCenter;
 int Distance;
 bool BallDetected;
 bool GoalDetected;
@@ -66,23 +62,50 @@ void loop() {
   Distance = duration * 0.034 / 2;
 
   int Blocks = pixy.ccc.getBlocks();
-  if (Blocks > 0) {
-    for (int i = 0; i < Blocks; i++) {
-      if (pixy.ccc.blocks[i].m_signature == 1) { // don't forget to replace 1 with name of the color signature!!!
-        pixyXCenter = pixy.ccc.blocks[i].m_x;
-        pixyYCenter = pixy.ccc.blocks[i].m_y;
-        pixyWidth = pixy.ccc.blocks[i].m_width;
-        pixyHeight = pixy.ccc.blocks[i].m_height;
-        
-        BallDetected = true;
-        Follow();
+  for (int i = 0; i < Blocks; i++) {
+    if (pixy.ccc.blocks[i].m_signature == 1) { // don't forget to replace 1 with name of the color signature!!!
+      BallXCenter = pixy.ccc.blocks[i].m_x;
+      
+      BallDetected = true;
+      
+      if(Distance < 5 || Distance >=2000){
+        BallCatched = true;
       }
+      else{
+        BallCatched = false;
+      }
+
+    }
+    else{
+      BallDetected = false;
+    }
+
+    if (pixy.ccc.blocks[i].m_signature == 2) { // don't forget to replace 2 with name of the color signature!!!
+      GoalXCenter = pixy.ccc.blocks[i].m_x;
+
+      GoalDetected = true;
+    }
+    else{
+      GoalDetected = false;
     }
   }
+
+  if(BallCatched == true && GoalDetected == true){
+    //You have the ball and found the goal
+    Follow(GoalXCenter);
+  }
+  else if(BallCatched == true){
+    //You got the ball,now find the Goal!
+    SearchGoal();
+  }
+  else if(BallDetected == true){
+    //Ball found,Go for it!
+    Follow(BallXCenter);
+  }
   else{
+    //Ball isn't detected,search for it!
     SearchBall();
   }
-
 }
 
 void MoveForward() {
@@ -106,7 +129,7 @@ void StopMotors() {
   analogWrite(motor1EnablePin, 0);
   analogWrite(motor2EnablePin, 0);
 
-  Serial.println("stopmotors");
+  Serial.println("StopMotors");
 }
 
 void MoveBackward(){
@@ -115,11 +138,10 @@ void MoveBackward(){
   digitalWrite(motor2Pin1, LOW);
   digitalWrite(motor2Pin2, HIGH);
 
-  // Set motor speeds to zero
   analogWrite(motor1EnablePin, MotorSpeed);
   analogWrite(motor2EnablePin, MotorSpeed);
 
-  Serial.println("Movebackwards");
+  Serial.println("MoveBackwards");
 }
 
 void MoveLeft() {
@@ -150,25 +172,18 @@ void SearchBall(){
   MoveLeft();
 }
 void SearchGoal(){
-  Follow();
+  MoveLeft();
 }
 
-void Follow() {
-  // Check if an object is detected
-  if (pixyWidth > 0 && pixyHeight > 0) {
-    // Object detected, move towards it
-    if (pixyXCenter <= 50) {
-      // Object is to the left, turn left
-      MoveLeft();
-    } else if (pixyXCenter > 250) {
-      // Object is to the right, turn right
-      MoveRight();
-    } else {
-      //object is centered,go get it!
-      MoveForward();
-    }
+void Follow(int pixyXCenter) {
+  if (pixyXCenter <= 50) {
+    // Object is to the left, turn left
+    MoveLeft();
+  } else if (pixyXCenter > 250) {
+    // Object is to the right, turn right
+    MoveRight();
   } else {
-    // No object detected, move forward
+    // object is centered, go get it!
     MoveForward();
   }
 }
