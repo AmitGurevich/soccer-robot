@@ -1,5 +1,6 @@
 #include <Pixy2.h>
 
+// Motor and sensor pin defines
 #define motor1Pin1 2
 #define motor1Pin2 4
 #define motor1EnablePin 3
@@ -10,6 +11,7 @@
 #define trigPin 9
 #define echoPin 8
 
+// Pixy camera address and motor speed
 #define pixyI2CAddress 0x54
 #define MotorSpeed 50
 
@@ -21,169 +23,184 @@ bool BallDetected;
 bool GoalDetected;
 bool BallCatched;
 
+// Pixy2 object
 Pixy2 pixy;
 
+// Motor class
+class Motor {
+public:
+  int pin1;
+  int pin2;
+  int enablePin;
+
+  Motor(int pin1, int pin2, int enablePin) {
+    this->pin1 = pin1;
+    this->pin2 = pin2;
+    this->enablePin = enablePin;
+  }
+
+  void init() {
+    pinMode(pin1, OUTPUT);
+    pinMode(pin2, OUTPUT);
+    pinMode(enablePin, OUTPUT);
+  }
+
+  void forward() {
+    digitalWrite(pin1, HIGH);
+    digitalWrite(pin2, LOW);
+    analogWrite(enablePin, MotorSpeed);
+  }
+
+  void backward() {
+    digitalWrite(pin1, LOW);
+    digitalWrite(pin2, HIGH);
+    analogWrite(enablePin, MotorSpeed);
+  }
+
+  void stop() {
+    digitalWrite(pin1, LOW);
+    digitalWrite(pin2, LOW);
+    analogWrite(enablePin, 0);
+  }
+};
+
+// Ultrasonic sensor class
+class UltrasonicSensor {
+public:
+  int trigPin;
+  int echoPin;
+
+  UltrasonicSensor(int trigPin, int echoPin) {
+    this->trigPin = trigPin;
+    this->echoPin = echoPin;
+  }
+
+  void init() {
+    pinMode(trigPin, OUTPUT);
+    pinMode(echoPin, INPUT);
+  }
+
+  int getDistance() {
+    long duration, distance;
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+    duration = pulseIn(echoPin, HIGH);
+    distance = duration * 0.034 / 2;
+    return distance;
+  }
+};
+
+// Main robot class
+class Robot {
+public:
+  Motor motor1;
+  Motor motor2;
+  UltrasonicSensor ultrasonicSensor;
+
+  Robot(Motor motor1, Motor motor2, UltrasonicSensor ultrasonicSensor) {
+    this->motor1 = motor1;
+    this->motor2 = motor2;
+    this->ultrasonicSensor = ultrasonicSensor;
+  }
+
+  void init() {
+    motor1.init();
+    motor2.init();
+    ultrasonicSensor.init();
+  }
+
+  void moveForward() {
+    motor1.forward();
+    motor2.forward();
+  }
+
+  void moveBackward() {
+    motor1.backward();
+    motor2.backward();
+  }
+
+  void moveLeft() {
+    motor1.forward();
+    motor2.backward();
+  }
+
+  void moveRight() {
+    motor1.backward();
+    motor2.forward();
+  }
+
+  void stop() {
+    motor1.stop();
+    motor2.stop();
+  }
+
+  int getDistance() {
+    return ultrasonicSensor.getDistance();
+  }
+
+  void follow(int pixyXCenter) {
+    if (pixyXCenter <= 50) {
+      // Object is to the left, turn left
+      moveLeft();
+    } else if (pixyXCenter > 250) {
+      // Object is to the right, turn right
+      moveRight();
+    } else {
+      // Object is centered, go get it!
+      moveForward();
+    }
+  }
+
+  void searchBall() {
+    moveLeft();
+  }
+
+  void searchGoal() {
+    moveLeft();
+  }
+};
+
+// Robot object
+Robot robot(Motor(motor1Pin1, motor1Pin2, motor1EnablePin), Motor(motor2Pin1, motor2Pin2, motor2EnablePin), UltrasonicSensor(trigPin, echoPin));
+
 void setup() {
-
-  // initualizing pixy 
   pixy.init();
-  
-  // Configure motor pins as output
-  pinMode(motor1Pin1, OUTPUT);
-  pinMode(motor1Pin2, OUTPUT);
-  pinMode(motor1EnablePin, OUTPUT);
-  pinMode(motor2Pin1, OUTPUT);
-  pinMode(motor2Pin2, OUTPUT);
-  pinMode(motor2EnablePin, OUTPUT);
-
-  // Configure ultrasonic sensor pins
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
-
-  // Set initial motor direction(this is made for knowing the direction of the motors)
-  digitalWrite(motor1Pin1, HIGH);
-  digitalWrite(motor1Pin2, LOW);
-  digitalWrite(motor2Pin1, HIGH);
-  digitalWrite(motor2Pin2, LOW);
-
-  // Initialize Serial communication
+  robot.init();
   Serial.begin(9600);
 }
 
 void loop() {
-  // calculating distance
-  long duration, Distance;
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  duration = pulseIn(echoPin, HIGH);
-  Distance = duration * 0.034 / 2;
-
+  Distance = robot.getDistance();
   int Blocks = pixy.ccc.getBlocks();
   for (int i = 0; i < Blocks; i++) {
-    if (pixy.ccc.blocks[i].m_signature == 1) { // don't forget to replace 1 with name of the color signature!!!
+    if (pixy.ccc.blocks[i].m_signature == 1) {
       BallXCenter = pixy.ccc.blocks[i].m_x;
-      
       BallDetected = true;
-      
-      if(Distance < 5 || Distance >=2000){
+      if (Distance < 5 || Distance >= 2000) {
         BallCatched = true;
-      }
-      else{
+      } else {
         BallCatched = false;
       }
-
-    }
-    else{
-      BallDetected = false;
-    }
-
-    if (pixy.ccc.blocks[i].m_signature == 2) { // don't forget to replace 2 with name of the color signature!!!
+    } else if (pixy.ccc.blocks[i].m_signature == 2) {
       GoalXCenter = pixy.ccc.blocks[i].m_x;
-
       GoalDetected = true;
     }
-    else{
-      GoalDetected = false;
-    }
   }
 
-  if(BallCatched == true && GoalDetected == true){
-    //You have the ball and found the goal
-    Follow(GoalXCenter);
-  }
-  else if(BallCatched == true){
-    //You got the ball,now find the Goal!
-    SearchGoal();
-  }
-  else if(BallDetected == true){
-    //Ball found,Go for it!
-    Follow(BallXCenter);
-  }
-  else{
-    //Ball isn't detected,search for it!
-    SearchBall();
-  }
-}
-
-void MoveForward() {
-  digitalWrite(motor1Pin1, HIGH);
-  digitalWrite(motor1Pin2, LOW);
-  digitalWrite(motor2Pin1, HIGH);
-  digitalWrite(motor2Pin2, LOW);
-
-  analogWrite(motor1EnablePin, MotorSpeed);
-  analogWrite(motor2EnablePin, MotorSpeed);
-
-  Serial.println("MoveForward");
-}
-
-void StopMotors() {
-  digitalWrite(motor1Pin1, LOW);
-  digitalWrite(motor1Pin2, LOW);
-  digitalWrite(motor2Pin1, LOW);
-  digitalWrite(motor2Pin2, LOW);
-
-  analogWrite(motor1EnablePin, 0);
-  analogWrite(motor2EnablePin, 0);
-
-  Serial.println("StopMotors");
-}
-
-void MoveBackward(){
-  digitalWrite(motor1Pin1, LOW);
-  digitalWrite(motor1Pin2, HIGH);
-  digitalWrite(motor2Pin1, LOW);
-  digitalWrite(motor2Pin2, HIGH);
-
-  analogWrite(motor1EnablePin, MotorSpeed);
-  analogWrite(motor2EnablePin, MotorSpeed);
-
-  Serial.println("MoveBackwards");
-}
-
-void MoveLeft() {
-  digitalWrite(motor1Pin1, LOW);
-  digitalWrite(motor1Pin2, HIGH);
-  digitalWrite(motor2Pin1, HIGH);
-  digitalWrite(motor2Pin2, LOW);
-
-  analogWrite(motor1EnablePin, MotorSpeed);
-  analogWrite(motor2EnablePin, MotorSpeed);
-
-  Serial.println("MoveLeft");
-}
-
-void MoveRight() {
-  digitalWrite(motor1Pin1, HIGH);
-  digitalWrite(motor1Pin2, LOW);
-  digitalWrite(motor2Pin1, LOW);
-  digitalWrite(motor2Pin2, HIGH);
-
-  analogWrite(motor1EnablePin, MotorSpeed);
-  analogWrite(motor2EnablePin, MotorSpeed);
-
-  Serial.println("MoveRight");
-}
-
-void SearchBall(){
-  MoveLeft();
-}
-void SearchGoal(){
-  MoveLeft();
-}
-
-void Follow(int pixyXCenter) {
-  if (pixyXCenter <= 50) {
-    // Object is to the left, turn left
-    MoveLeft();
-  } else if (pixyXCenter > 250) {
-    // Object is to the right, turn right
-    MoveRight();
+  if (BallCatched == true && GoalDetected == true) {
+    // You have the ball and found the goal
+    robot.follow(GoalXCenter);
+  } else if (BallCatched == true) {
+    // You got the ball, now find the Goal!
+    robot.searchGoal();
+  } else if (BallDetected == true) {
+    // Ball found, Go for it!
+    robot.follow(BallXCenter);
   } else {
-    // object is centered, go get it!
-    MoveForward();
+    // Ball isn't detected, search for it!
+    robot.searchBall();
   }
 }
