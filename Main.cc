@@ -7,16 +7,13 @@
 #define motor2Pin2 7
 #define motor2EnablePin 6
 
-#define trigPin 9
-#define echoPin 8
-
 #define pixyI2CAddress 0x54
 #define MotorSpeed 50
 
 // Pixy camera and global variables
 int BallXCenter;
 int GoalXCenter;
-int Distance;
+int BallXWidth;
 bool BallDetected;
 bool GoalDetected;
 bool BallCatched;
@@ -36,10 +33,6 @@ void setup() {
   pinMode(motor2Pin2, OUTPUT);
   pinMode(motor2EnablePin, OUTPUT);
 
-  // Configure ultrasonic sensor pins
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
-
   // Set initial motor direction(this is made for knowing the direction of the motors)
   digitalWrite(motor1Pin1, HIGH);
   digitalWrite(motor1Pin2, LOW);
@@ -50,61 +43,56 @@ void setup() {
   Serial.begin(9600);
 }
 
-void loop() {
-  // calculating distance
-  long duration, Distance;
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  duration = pulseIn(echoPin, HIGH);
-  Distance = duration * 0.034 / 2;
-
+void loop() { 
   int Blocks = pixy.ccc.getBlocks();
+
+  BallCatched = false;
+  GoalDetected = false;
+
   for (int i = 0; i < Blocks; i++) {
+    Serial.println(pixy.ccc.blocks[i].m_signature);
     if (pixy.ccc.blocks[i].m_signature == 1) { // don't forget to replace 1 with name of the color signature!!!
+
       BallXCenter = pixy.ccc.blocks[i].m_x;
-      
+      BallXWidth = pixy.ccc.blocks[i].m_width;
+
       BallDetected = true;
       
-      if(Distance < 5 || Distance >=2000){
+      if(BallXWidth >= 200){
+        
         BallCatched = true;
-      }
-      else{
-        BallCatched = false;
-      }
 
-    }
-    else{
-      BallDetected = false;
+      }
     }
 
-    if (pixy.ccc.blocks[i].m_signature == 2) { // don't forget to replace 2 with name of the color signature!!!
+    if (pixy.ccc.blocks[i].m_signature == 2) {
+
       GoalXCenter = pixy.ccc.blocks[i].m_x;
-
       GoalDetected = true;
-    }
-    else{
-      GoalDetected = false;
+
     }
   }
 
   if(BallCatched == true && GoalDetected == true){
     //You have the ball and found the goal
     Follow(GoalXCenter);
+    Serial.println("Goal");
   }
   else if(BallCatched == true){
     //You got the ball,now find the Goal!
     SearchGoal();
+    Serial.println("SearchGoal");
   }
   else if(BallDetected == true){
     //Ball found,Go for it!
+    Serial.println("FollowBall");
     Follow(BallXCenter);
   }
   else{
     //Ball isn't detected,search for it!
     SearchBall();
+    Serial.println(BallDetected);
+    Serial.println("SearchBall");
   }
 }
 
@@ -116,20 +104,6 @@ void MoveForward() {
 
   analogWrite(motor1EnablePin, MotorSpeed);
   analogWrite(motor2EnablePin, MotorSpeed);
-
-  Serial.println("MoveForward");
-}
-
-void StopMotors() {
-  digitalWrite(motor1Pin1, LOW);
-  digitalWrite(motor1Pin2, LOW);
-  digitalWrite(motor2Pin1, LOW);
-  digitalWrite(motor2Pin2, LOW);
-
-  analogWrite(motor1EnablePin, 0);
-  analogWrite(motor2EnablePin, 0);
-
-  Serial.println("StopMotors");
 }
 
 void MoveBackward(){
@@ -140,8 +114,6 @@ void MoveBackward(){
 
   analogWrite(motor1EnablePin, MotorSpeed);
   analogWrite(motor2EnablePin, MotorSpeed);
-
-  Serial.println("MoveBackwards");
 }
 
 void MoveLeft() {
@@ -152,8 +124,6 @@ void MoveLeft() {
 
   analogWrite(motor1EnablePin, MotorSpeed);
   analogWrite(motor2EnablePin, MotorSpeed);
-
-  Serial.println("MoveLeft");
 }
 
 void MoveRight() {
@@ -164,8 +134,6 @@ void MoveRight() {
 
   analogWrite(motor1EnablePin, MotorSpeed);
   analogWrite(motor2EnablePin, MotorSpeed);
-
-  Serial.println("MoveRight");
 }
 
 void SearchBall(){
@@ -175,15 +143,24 @@ void SearchGoal(){
   MoveLeft();
 }
 
+void Debug(int ToPrint){
+  Serial.println(ToPrint);
+  delay(500);
+}
 void Follow(int pixyXCenter) {
+
   if (pixyXCenter <= 50) {
     // Object is to the left, turn left
     MoveLeft();
+    //Serial.println("MoveLeft");
   } else if (pixyXCenter > 250) {
     // Object is to the right, turn right
     MoveRight();
+    //Serial.println("MoveRight");
   } else {
     // object is centered, go get it!
+    //Serial.println("MoveForward");
     MoveForward();
   }
+
 }
