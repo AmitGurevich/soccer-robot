@@ -141,18 +141,26 @@ public:
     return ultrasonicSensor.getDistance();
   }
 
-  void follow(int pixyXCenter) {
-    if (pixyXCenter <= 50) {
-      // Object is to the left, turn left
-      moveLeft();
-    } else if (pixyXCenter > 250) {
-      // Object is to the right, turn right
-      moveRight();
-    } else {
-      // Object is centered, go get it!
-      moveForward();
-    }
-  }
+  void Follow(int pixyXCenter) {
+
+  // Calculate proportional difference for motor speed adjustments
+  int difference = pixyXCenter - 150;  // Assuming camera center is at 150
+  int motorSpeedDifference = difference * 2;  // Adjust the multiplier as needed
+  
+  // Constrain motor speeds within valid range
+  int motor1Speed = constrain(MotorSpeed - motorSpeedDifference, 0, 255);
+  int motor2Speed = constrain(MotorSpeed + motorSpeedDifference, 0, 255);
+
+  // Move both motors forward with adjusted speeds
+  analogWrite(motor1EnablePin, motor1Speed);
+  analogWrite(motor2EnablePin, motor2Speed);
+
+  // Set both motors to move forward (no turning)
+  digitalWrite(motor1Pin1, HIGH);
+  digitalWrite(motor1Pin2, LOW);
+  digitalWrite(motor2Pin1, HIGH);
+  digitalWrite(motor2Pin2, LOW);
+}
 
   void searchBall() {
     moveLeft();
